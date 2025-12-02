@@ -126,12 +126,25 @@
 </div>
 
 <script>
+/* ==============================
+   CONFIGURACIÓN SUPABASE
+============================== */
 const SUPABASE_URL = "https://rwsbibdoakugyvunljir.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3c2JpYmRvYWt1Z3l2dW5samlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MzE1NDcsImV4cCI6MjA4MDIwNzU0N30.8u6ZFVR4GqtUpv7B1t9bCE1em5Pq8UBnVrUVA0_ktAk";
 
-// ================================
-// GUARDAR MOVIMIENTO IN INVENTORY
-// ================================
+/* ==============================
+   AUTO-RELLENAR EL QR DESDE LA URL
+   Ejemplo: ?qr=SHELF-001
+============================== */
+const urlParams = new URLSearchParams(window.location.search);
+const qrFromURL = urlParams.get("qr");
+if (qrFromURL) {
+  document.getElementById("qr").value = qrFromURL;
+}
+
+/* ==============================
+   FUNCIÓN PARA GUARDAR MOVIMIENTO
+============================== */
 async function guardar() {
   const qr = document.getElementById("qr").value.trim();
   const factura = document.getElementById("factura").value.trim();
@@ -143,13 +156,14 @@ async function guardar() {
 
   msg.innerHTML = "";
 
-  // Validación rápida
-  if (!qr || !factura || !cantidad || !usuario) {
-    msg.innerHTML = "<div class='alert error'>Completa todos los campos obligatorios.</div>";
+  if (!qr || !cantidad || !usuario) {
+    msg.innerHTML = "<div class='alert error'>Completa los campos obligatorios.</div>";
     return;
   }
 
-  // Consultar estante
+  /* ==============================
+     1. BUSCAR EL ESTANTE
+  ============================== */
   const estanteRes = await fetch(
     `${SUPABASE_URL}/rest/v1/estante?codigo_qr=eq.${qr}`,
     {
@@ -163,13 +177,15 @@ async function guardar() {
   const estantes = await estanteRes.json();
 
   if (estantes.length === 0) {
-    msg.innerHTML = "<div class='alert error'>El código QR no existe.</div>";
+    msg.innerHTML = "<div class='alert error'>❌ El código QR no existe en la base de datos.</div>";
     return;
   }
 
   const estante = estantes[0];
 
-  // Guardar movimiento
+  /* ==============================
+     2. INSERTAR MOVIMIENTO
+  ============================== */
   const resp = await fetch(
     `${SUPABASE_URL}/rest/v1/movimiento_inventario`,
     {
@@ -193,6 +209,12 @@ async function guardar() {
 
   if (resp.ok) {
     msg.innerHTML = "<div class='alert ok'>✔ Movimiento registrado correctamente</div>";
+    
+    // limpiar campos
+    document.getElementById("cantidad").value = "";
+    document.getElementById("factura").value = "";
+    document.getElementById("notas").value = "";
+
   } else {
     msg.innerHTML = "<div class='alert error'>❌ Error al guardar el movimiento</div>";
   }
