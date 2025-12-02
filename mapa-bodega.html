@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Mapa de Bodega</title>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<style>
+  body { font-family: Arial; padding:20px; background:#f3f5f7; }
+  h2 { text-align:center; }
+  .grid {
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap:10px;
+    margin-top:20px;
+  }
+  .estante {
+    background:white;
+    border-radius:10px;
+    padding:10px;
+    text-align:center;
+    box-shadow:0 2px 6px rgba(0,0,0,0.1);
+    cursor:pointer;
+    font-size:13px;
+  }
+  .estante.low { background:#fee2e2; }
+</style>
+</head>
+<body>
+<h2>🗺️ Mapa de Bodega</h2>
+<div class="grid" id="grid"></div>
+
+<script>
+const SUPABASE_URL = "https://rwsbibdoakugyvunljir.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3c2JpYmRvYWt1Z3l2dW5samlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MzE1NDcsImV4cCI6MjA4MDIwNzU0N30.8u6ZFVR4GqtUpv7B1t9bCE1em5Pq8UBnVrUVA0_ktAk";
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function cargarMapa() {
+  // Un join sencillo: estante + producto + stock
+  const { data, error } = await supabaseClient
+    .from('estante')
+    .select('estante_id,codigo_qr,descripcion,producto:producto_id(nombre,codigo),stock:vista_stock_actual!inner(stock_actual)');
+
+  const grid = document.getElementById("grid");
+  grid.innerHTML = "";
+
+  if (error) {
+    grid.innerHTML = "<p>Error cargando mapa</p>";
+    return;
+  }
+
+  data.forEach(e => {
+    const div = document.createElement("div");
+    const stock = e.stock?.stock_actual ?? 0;
+    if (stock <= 5) div.className = "estante low";
+    else div.className = "estante";
+    div.innerHTML = `
+      <strong>${e.codigo_qr}</strong><br>
+      ${e.producto?.nombre || ''}<br>
+      Stock: ${stock}
+    `;
+    grid.appendChild(div);
+  });
+}
+
+cargarMapa();
+</script>
+</body>
+</html>

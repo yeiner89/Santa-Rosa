@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Admin Inventario</title>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<style>
+  body { font-family: Arial; padding: 20px; background:#f3f5f7; }
+  h2 { text-align:center; }
+  label { display:block; margin-top:10px; }
+  input { width:100%; padding:8px; }
+  button { margin-top:10px; padding:10px 14px; }
+  table { width:100%; margin-top:20px; border-collapse: collapse; background:white; }
+  th, td { border:1px solid #ddd; padding:6px; font-size:13px; }
+  th { background:#e5e7eb; }
+</style>
+</head>
+<body>
+<h2>⚙️ Administración</h2>
+
+<h3>Nuevo Producto</h3>
+<label>Código</label><input id="p-codigo">
+<label>Nombre</label><input id="p-nombre">
+<label>Unidad base</label><input id="p-unidad" placeholder="Unidad / Saco / Tarima">
+<button onclick="crearProducto()">Crear Producto</button>
+
+<h3>Nuevo Estante</h3>
+<label>Código QR</label><input id="e-qr" placeholder="SHELF-001">
+<label>Descripción</label><input id="e-desc">
+<label>Producto ID</label><input id="e-prod-id">
+<button onclick="crearEstante()">Crear Estante</button>
+
+<h3>Productos existentes</h3>
+<table id="tbl-prod">
+  <thead>
+    <tr><th>ID</th><th>Código</th><th>Nombre</th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+const SUPABASE_URL = "https://rwsbibdoakugyvunljir.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3c2JpYmRvYWt1Z3l2dW5samlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MzE1NDcsImV4cCI6MjA4MDIwNzU0N30.8u6ZFVR4GqtUpv7B1t9bCE1em5Pq8UBnVrUVA0_ktAk";
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function crearProducto() {
+  const codigo = document.getElementById("p-codigo").value.trim();
+  const nombre = document.getElementById("p-nombre").value.trim();
+  const unidad = document.getElementById("p-unidad").value.trim();
+  if (!codigo || !nombre || !unidad) return;
+
+  await supabaseClient.from('producto').insert({ codigo, nombre, unidad_base: unidad });
+  cargarProductos();
+}
+
+async function crearEstante() {
+  const codigo_qr = document.getElementById("e-qr").value.trim();
+  const descripcion = document.getElementById("e-desc").value.trim();
+  const producto_id = Number(document.getElementById("e-prod-id").value);
+  if (!codigo_qr || !producto_id) return;
+
+  await supabaseClient.from('estante').insert({ codigo_qr, descripcion, producto_id });
+}
+
+async function cargarProductos() {
+  const { data } = await supabaseClient.from('producto').select('*').order('producto_id');
+  const tbody = document.querySelector("#tbl-prod tbody");
+  tbody.innerHTML = "";
+  (data || []).forEach(p => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${p.producto_id}</td><td>${p.codigo}</td><td>${p.nombre}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+cargarProductos();
+</script>
+</body>
+</html>

@@ -2,10 +2,11 @@
 <html>
 <head>
 <meta charset="UTF-8" />
-<title>Registro de Inventario</title>
+<title>Inventario Ferretería</title>
 
-<!-- Fuente moderna -->
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/html5-qrcode"></script>
 
 <style>
   body {
@@ -15,7 +16,6 @@
     justify-content: center;
     padding: 30px;
   }
-
   .container {
     width: 100%;
     max-width: 420px;
@@ -24,21 +24,18 @@
     border-radius: 16px;
     box-shadow: 0 8px 25px rgba(0,0,0,0.1);
   }
-
-  h2 {
+  h2,h3 {
     text-align: center;
     font-weight: 600;
     padding-bottom: 10px;
     color: #333;
   }
-
   label {
     font-weight: 500;
     margin-top: 12px;
     display: block;
     color: #444;
   }
-
   input, select {
     width: 100%;
     padding: 12px;
@@ -48,13 +45,11 @@
     background: #fafafa;
     font-size: 15px;
   }
-
   input:focus, select:focus {
     outline: none;
     border-color: #4a90e2;
     background: white;
   }
-
   button {
     width: 100%;
     padding: 14px;
@@ -68,10 +63,13 @@
     cursor: pointer;
     transition: 0.25s;
   }
+  button:hover { background: #3578c6; }
 
-  button:hover {
-    background: #3578c6;
+  .btn-secondary {
+    background: #777;
+    margin-top: 10px;
   }
+  .btn-secondary:hover { background: #555; }
 
   .alert {
     margin-top: 18px;
@@ -80,15 +78,32 @@
     text-align: center;
     font-weight: 500;
   }
+  .ok { background: #d9f7e3; color: #1c7e36; }
+  .error { background: #ffd8d8; color: #b30000; }
 
-  .ok {
-    background: #d9f7e3;
-    color: #1c7e36;
+  #scanner {
+    margin-top: 10px;
+    display: none;
   }
 
-  .error {
-    background: #ffd8d8;
-    color: #b30000;
+  .hidden { display: none; }
+  .nav {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .nav a {
+    flex: 1;
+    text-align: center;
+    text-decoration: none;
+    background: #e5e7eb;
+    padding: 8px;
+    border-radius: 8px;
+    color: #333;
+    font-size: 13px;
+  }
+  .nav a:hover {
+    background: #d1d5db;
   }
 </style>
 </head>
@@ -96,129 +111,325 @@
 <body>
 
 <div class="container">
-  <h2>📦 Movimiento de Inventario</h2>
+  <!-- Vista LOGIN -->
+  <div id="login-view">
+    <h2>🔐 Iniciar Sesión</h2>
+    <label>Email</label>
+    <input id="login-email" type="email" placeholder="correo@ejemplo.com">
+    <label>Contraseña</label>
+    <input id="login-password" type="password" placeholder="********">
+    <button onclick="login()">Entrar</button>
+    <div id="login-msg"></div>
+  </div>
 
-  <label>Código QR del Estante</label>
-  <input id="qr" placeholder="SHELF-001">
+  <!-- Vista APP -->
+  <div id="app-view" class="hidden">
+    <h2>📦 Movimiento de Inventario</h2>
+    <p id="user-info" style="font-size: 13px; color:#555;"></p>
 
-  <label>Número de Factura</label>
-  <input id="factura" placeholder="000123">
+    <div class="nav">
+      <a href="dashboard.html" id="link-dashboard">Dashboard</a>
+      <a href="admin.html" id="link-admin">Admin</a>
+      <a href="mapa-bodega.html" id="link-mapa">Mapa Bodega</a>
+    </div>
 
-  <label>Cantidad</label>
-  <input id="cantidad" type="number" min="0">
+    <label>Código QR del Estante</label>
+    <input id="qr" placeholder="SHELF-001">
 
-  <label>Tipo de Movimiento</label>
-  <select id="tipo">
-    <option value="ENT">Entrada</option>
-    <option value="SAL">Salida</option>
-    <option value="AJU">Ajuste</option>
-  </select>
+    <button class="btn-secondary" type="button" onclick="toggleScanner()">📷 Escanear QR</button>
+    <div id="scanner"></div>
 
-  <label>Usuario</label>
-  <input id="usuario" placeholder="Nombre del empleado">
+    <label>Número de Factura</label>
+    <input id="factura" placeholder="000123">
 
-  <label>Notas</label>
-  <input id="notas" placeholder="Opcional">
+    <label>Cantidad</label>
+    <input id="cantidad" type="number" min="0">
 
-  <button onclick="guardar()">Registrar Movimiento</button>
+    <label>Tipo de Movimiento</label>
+    <select id="tipo">
+      <option value="ENT">Entrada</option>
+      <option value="SAL">Salida</option>
+      <option value="AJU">Ajuste</option>
+    </select>
 
-  <div id="msg"></div>
+    <label>Notas</label>
+    <input id="notas" placeholder="Opcional (obligatorio en Ajuste)">
+
+    <label>Foto / Evidencia (opcional)</label>
+    <input id="foto" type="file" accept="image/*">
+
+    <button onclick="guardar()">Registrar Movimiento</button>
+    <button class="btn-secondary" type="button" onclick="logout()">Cerrar Sesión</button>
+
+    <div id="msg"></div>
+  </div>
 </div>
 
 <script>
-/* ==============================
+/* =========================
    CONFIGURACIÓN SUPABASE
-============================== */
+========================= */
 const SUPABASE_URL = "https://rwsbibdoakugyvunljir.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3c2JpYmRvYWt1Z3l2dW5samlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MzE1NDcsImV4cCI6MjA4MDIwNzU0N30.8u6ZFVR4GqtUpv7B1t9bCE1em5Pq8UBnVrUVA0_ktAk";
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-/* ==============================
-   AUTO-RELLENAR EL QR DESDE LA URL
-   Ejemplo: ?qr=SHELF-001
-============================== */
+let currentUser = null;
+let currentProfile = null;
+let html5QrCode = null;
+
+/* =========================
+   AUTO-RELLENO DEL ?qr=
+========================= */
 const urlParams = new URLSearchParams(window.location.search);
 const qrFromURL = urlParams.get("qr");
 if (qrFromURL) {
-  document.getElementById("qr").value = qrFromURL;
+  const qrInput = document.getElementById("qr");
+  if (qrInput) qrInput.value = qrFromURL;
 }
 
-/* ==============================
-   FUNCIÓN PARA GUARDAR MOVIMIENTO
-============================== */
+/* =========================
+   GESTIÓN DE SESIÓN
+========================= */
+async function checkSession() {
+  const { data } = await supabaseClient.auth.getSession();
+  if (data.session && data.session.user) {
+    currentUser = data.session.user;
+    await loadProfile();
+    showApp();
+  } else {
+    showLogin();
+  }
+}
+
+function showLogin() {
+  document.getElementById("login-view").classList.remove("hidden");
+  document.getElementById("app-view").classList.add("hidden");
+}
+
+function showApp() {
+  document.getElementById("login-view").classList.add("hidden");
+  document.getElementById("app-view").classList.remove("hidden");
+  const info = document.getElementById("user-info");
+  info.textContent = `Usuario: ${currentProfile?.nombre || currentUser.email} | Rol: ${currentProfile?.rol || 'empleado'}`;
+
+  // Mostrar/ocultar accesos según rol
+  if (currentProfile?.rol === 'empleado') {
+    document.getElementById("link-dashboard").style.display = 'none';
+    document.getElementById("link-admin").style.display = 'none';
+  }
+}
+
+/* =========================
+   LOGIN / LOGOUT
+========================= */
+async function login() {
+  const email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value.trim();
+  const msg = document.getElementById("login-msg");
+  msg.innerHTML = "";
+
+  if (!email || !password) {
+    msg.innerHTML = "<div class='alert error'>Ingresa email y contraseña.</div>";
+    return;
+  }
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    msg.innerHTML = "<div class='alert error'>Error al iniciar sesión: " + error.message + "</div>";
+    return;
+  }
+
+  currentUser = data.user;
+  await loadProfile();
+  showApp();
+}
+
+async function loadProfile() {
+  if (!currentUser) return;
+  const { data, error } = await supabaseClient
+    .from('perfil_usuario')
+    .select('*')
+    .eq('user_id', currentUser.id)
+    .single();
+  if (!error && data) currentProfile = data;
+}
+
+async function logout() {
+  await supabaseClient.auth.signOut();
+  currentUser = null;
+  currentProfile = null;
+  showLogin();
+}
+
+/* =========================
+   ESCÁNER DE QR
+========================= */
+function toggleScanner() {
+  const div = document.getElementById("scanner");
+  if (div.style.display === "none" || div.style.display === "") {
+    startScanner();
+  } else {
+    stopScanner();
+  }
+}
+
+function startScanner() {
+  const div = document.getElementById("scanner");
+  div.style.display = "block";
+  div.innerHTML = ""; // limpiar
+
+  html5QrCode = new Html5Qrcode("scanner");
+  const config = { fps: 10, qrbox: 200 };
+
+  html5QrCode.start(
+    { facingMode: "environment" },
+    config,
+    (decodedText) => {
+      document.getElementById("qr").value = decodedText;
+      stopScanner();
+    },
+    (errorMessage) => {
+      // errores de lectura, se pueden ignorar
+    }
+  );
+}
+
+function stopScanner() {
+  const div = document.getElementById("scanner");
+  if (html5QrCode) {
+    html5QrCode.stop().then(() => {
+      html5QrCode.clear();
+      div.style.display = "none";
+    }).catch(err => {
+      div.style.display = "none";
+    });
+  } else {
+    div.style.display = "none";
+  }
+}
+
+/* =========================
+   VALIDAR STOCK ACTUAL EN SUPABASE
+========================= */
+async function getStockActual(producto_id) {
+  const { data, error } = await supabaseClient
+    .from('vista_stock_actual')
+    .select('stock_actual')
+    .eq('producto_id', producto_id)
+    .single();
+
+  if (error || !data) return 0;
+  return Number(data.stock_actual || 0);
+}
+
+/* =========================
+   SUBIR FOTO A STORAGE
+========================= */
+async function uploadFoto(file) {
+  if (!file) return null;
+  const fileName = `${Date.now()}_${file.name}`;
+  const { data, error } = await supabaseClient.storage
+    .from('Evidencias')  // asegúrate de tener este bucket creado y público
+    .upload(`movimientos/${fileName}`, file);
+
+  if (error) {
+    console.warn("Error subiendo foto:", error.message);
+    return null;
+  }
+
+  const { data: publicUrlData } = supabaseClient.storage
+    .from('evidencias')
+    .getPublicUrl(`movimientos/${fileName}`);
+
+  return publicUrlData.publicUrl;
+}
+
+/* =========================
+   GUARDAR MOVIMIENTO
+========================= */
 async function guardar() {
+  const msg = document.getElementById("msg");
+  msg.innerHTML = "";
+
+  if (!currentUser) {
+    msg.innerHTML = "<div class='alert error'>Debes iniciar sesión.</div>";
+    return;
+  }
+
   const qr = document.getElementById("qr").value.trim();
   const factura = document.getElementById("factura").value.trim();
   const cantidad = Number(document.getElementById("cantidad").value);
   const tipo = document.getElementById("tipo").value;
-  const usuario = document.getElementById("usuario").value.trim();
   const notas = document.getElementById("notas").value.trim();
-  const msg = document.getElementById("msg");
+  const fotoFile = document.getElementById("foto").files[0];
 
-  msg.innerHTML = "";
-
-  if (!qr || !cantidad || !usuario) {
-    msg.innerHTML = "<div class='alert error'>Completa los campos obligatorios.</div>";
+  if (!qr || !cantidad) {
+    msg.innerHTML = "<div class='alert error'>Código QR y cantidad son obligatorios.</div>";
     return;
   }
 
-  /* ==============================
-     1. BUSCAR EL ESTANTE
-  ============================== */
-  const estanteRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/estante?codigo_qr=eq.${qr}`,
-    {
-      headers: {
-        "apikey": SUPABASE_KEY,
-        "Authorization": "Bearer " + SUPABASE_KEY
-      }
-    }
-  );
+  if (tipo === 'AJU' && !notas) {
+    msg.innerHTML = "<div class='alert error'>Los ajustes deben tener una nota explicando el motivo.</div>";
+    return;
+  }
 
-  const estantes = await estanteRes.json();
+  // 1. Buscar estante
+  const { data: estantes, error: estError } = await supabaseClient
+    .from('estante')
+    .select('*')
+    .eq('codigo_qr', qr);
 
-  if (estantes.length === 0) {
-    msg.innerHTML = "<div class='alert error'>❌ El código QR no existe en la base de datos.</div>";
+  if (estError || !estantes || estantes.length === 0) {
+    msg.innerHTML = "<div class='alert error'>El código QR no existe en la base de datos.</div>";
     return;
   }
 
   const estante = estantes[0];
 
-  /* ==============================
-     2. INSERTAR MOVIMIENTO
-  ============================== */
-  const resp = await fetch(
-    `${SUPABASE_URL}/rest/v1/movimiento_inventario`,
-    {
-      method: "POST",
-      headers: {
-        "apikey": SUPABASE_KEY,
-        "Authorization": "Bearer " + SUPABASE_KEY,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        producto_id: estante.producto_id,
-        estante_id: estante.estante_id,
-        tipo_movimiento: tipo,
-        cantidad: cantidad,
-        factura: factura,
-        usuario: usuario,
-        notas: notas
-      })
+  // 2. Validar stock si es SAL
+  if (tipo === 'SAL') {
+    const stockActual = await getStockActual(estante.producto_id);
+    if (cantidad > stockActual) {
+      msg.innerHTML = `<div class='alert error'>No puedes sacar ${cantidad}. Solo hay ${stockActual} en stock.</div>`;
+      return;
     }
-  );
+  }
 
-  if (resp.ok) {
+  // 3. Subir foto si existe
+  let foto_url = null;
+  if (fotoFile) {
+    foto_url = await uploadFoto(fotoFile);
+  }
+
+  // 4. Insertar movimiento
+  const movimientoBody = {
+    producto_id: estante.producto_id,
+    estante_id: estante.estante_id,
+    tipo_movimiento: tipo,
+    cantidad: cantidad,
+    factura: factura,
+    usuario: currentProfile?.nombre || currentUser.email,
+    notas: notas,
+    foto_url: foto_url // debes haber agregado esta columna a movimiento_inventario
+  };
+
+  const { error: movError } = await supabaseClient
+    .from('movimiento_inventario')
+    .insert(movimientoBody);
+
+  if (movError) {
+    msg.innerHTML = "<div class='alert error'>❌ Error al guardar el movimiento: " + movError.message + "</div>";
+  } else {
     msg.innerHTML = "<div class='alert ok'>✔ Movimiento registrado correctamente</div>";
-    
-    // limpiar campos
     document.getElementById("cantidad").value = "";
     document.getElementById("factura").value = "";
     document.getElementById("notas").value = "";
-
-  } else {
-    msg.innerHTML = "<div class='alert error'>❌ Error al guardar el movimiento</div>";
+    document.getElementById("foto").value = "";
   }
 }
+
+// Iniciar chequeo de sesión al cargar
+checkSession();
 </script>
 
 </body>
